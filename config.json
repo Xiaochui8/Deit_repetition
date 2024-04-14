@@ -1,0 +1,31 @@
+{
+
+  "data_args": {
+    "datasets_path": "data",
+    "resolution": 32,
+    "batch_size": 128,
+    "embedding_dim": 192
+  },
+  "train_args": {
+    "num_epochs": 5,
+    "lr": 0.001,
+    "momentum": 0.9,
+    "checkpoint_interval": 1,
+    "checkpoint_path": "checkpoint",
+    "model_save_path": "model_save"
+  },
+  "vit_args": {
+    "in_channels": 3,
+    "patch_size": 2,
+    "embed_size": 192,
+    "image_size": 32,
+    "depth": 12,
+    "num_heads": 6,
+    "drop_p": 0.0,
+    "forward_expansion": 4,
+    "forward_drop_p": 0.0,
+    "num_classes": 10,
+    "if_cls": true,
+    "if_dis": false
+  }
+}
