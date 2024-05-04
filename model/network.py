@@ -22,10 +22,22 @@ class FeedForwardBlock(nn.Sequential):
             nn.Linear(expansion * emb_size, emb_size),
         )
 
+
 class ClassificationHead(nn.Module):
-    def __init__(self, emb_size: int = 192, n_classes: int = 10, if_cls: bool = True, if_dis: bool = False):
+    def __init__(self, emb_size: int = 192, n_classes: int = 10):
         super(ClassificationHead, self).__init__()
-        Reduce('b n e -> b e', reduction='mean')
+        self.model = nn.Sequential(
+            nn.LayerNorm(emb_size),
+            nn.Linear(emb_size, n_classes)
+        )
+
+    def forward(self, x):
+        return self.model(x[:, 0, :].squeeze())
+
+
+class ClassificationHead2(nn.Module):
+    def __init__(self, emb_size: int = 192, n_classes: int = 10, if_cls: bool = True, if_dis: bool = False):
+        super(ClassificationHead2, self).__init__()
         self.layer = nn.LayerNorm(emb_size)
         self.linear = nn.Linear(emb_size, n_classes)
 
@@ -39,3 +51,5 @@ class ClassificationHead(nn.Module):
         result = torch.stack([cls_output, dis_output], dim=1)
         #input (b, n, e) output (b, 2, e)
         return result
+
+

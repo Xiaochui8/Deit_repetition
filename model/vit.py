@@ -1,7 +1,7 @@
 from torch import nn
 from model.embedding import PatchEmbedding
 from model.transformer import TransformerEncoder
-from model.network import ClassificationHead
+from model.network import ClassificationHead, ClassificationHead2
 
 class ViT(nn.Sequential):
     def __init__(self,

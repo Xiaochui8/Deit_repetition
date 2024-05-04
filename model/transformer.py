@@ -2,7 +2,21 @@ from torch import nn, Tensor
 from einops import rearrange
 import torch
 from model.network import ResidualAdd, FeedForwardBlock
+import os, warnings
 
+XFORMERS_ENABLED = os.environ.get("XFORMERS_DISABLED") is None
+try:
+    if XFORMERS_ENABLED:
+        from xformers.ops import memory_efficient_attention, unbind
+
+        XFORMERS_AVAILABLE = True
+        warnings.warn("xFormers is available (Attention)")
+    else:
+        warnings.warn("xFormers is disabled (Attention)")
+        raise ImportError
+except ImportError:
+    XFORMERS_AVAILABLE = False
+    warnings.warn("xFormers is not available (Attention)")
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, emb_size: int = 192, num_heads: int = 6, dropout: float = 0):
@@ -13,6 +27,7 @@ class MultiHeadAttention(nn.Module):
         self.qkv = nn.Linear(emb_size, emb_size * 3)
         self.att_drop = nn.Dropout(dropout)
         self.projection = nn.Linear(emb_size, emb_size)
+        self.dropout = dropout
 
     def forward(self, x: Tensor, mask: Tensor = None) -> Tensor:
         # split keys, queries and values in num_heads
@@ -24,7 +39,7 @@ class MultiHeadAttention(nn.Module):
             fill_value = torch.finfo(torch.float32).min
             energy.mask_fill(~mask, fill_value)
 
-        scaling = self.emb_size ** (1 / 2)
+        scaling = self.emb_size ** 0.5
         att = nn.functional.softmax(energy, dim=-1) / scaling
         att = self.att_drop(att)
         # sum up over the third axis
@@ -32,6 +47,23 @@ class MultiHeadAttention(nn.Module):
         out = rearrange(out, "b h n d -> b n (h d)")
         out = self.projection(out)
         return out
+
+class MemEffMultiHeadAttention(MultiHeadAttention):
+
+    def forward(self, x: Tensor, attn_bias=None) -> Tensor:
+        if not XFORMERS_AVAILABLE:
+            return super().forward(x)
+
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
+
+        q, k, v = unbind(qkv, 2)
+
+        x = memory_efficient_attention(q, k, v, p = self.dropout)
+        x = x.reshape(B, N, C)
+
+        x = self.projection(x)
+        return x
 
 class TransformerEncoderBlock(nn.Sequential):
     def __init__(self,
@@ -43,7 +75,7 @@ class TransformerEncoderBlock(nn.Sequential):
         super().__init__(
             ResidualAdd(nn.Sequential(
                 nn.LayerNorm(emb_size),
-                MultiHeadAttention(emb_size, num_heads, drop_p),
+                MemEffMultiHeadAttention(emb_size, num_heads, drop_p),
                 nn.Dropout(drop_p)
             )),
             ResidualAdd(nn.Sequential(
